@@ -11,11 +11,15 @@ module Rack
 
     def call(env)
       @mutex.lock
+      unlock = Fiber.new do
+        Fiber.yield @mutex.unlock
+        Fiber.yield @mutex while true
+      end
       begin
         response = @app.call(env.merge(RACK_MULTITHREAD => false))
-        returned = response << BodyProxy.new(response.pop) { @mutex.unlock }
+        returned = response << BodyProxy.new(response.pop) { unlock.resume }
       ensure
-        @mutex.unlock unless returned
+        unlock.resume unless returned
       end
     end
   end
